@@ -5,6 +5,7 @@
 TOUCH_ROOT := $(KERNEL_SRC)/$(M)
 KBUILD_OPTIONS := TOUCH_ROOT=$(TOUCH_ROOT) CONFIG_MSM_TOUCH=m
 KBUILD_OPTIONS += KBUILD_EXTRA_SYMBOLS=$(M)/../display-drivers/msm/Module.symvers
+KBUILD_OPTIONS += KBUILD_EXTRA_SYMBOLS=$(M)/../display-drivers/msm/Module.symvers
 
 .PHONY: all modules modules_install clean
 
