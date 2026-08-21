@@ -2952,7 +2952,18 @@ static void nvt_set_gesture_mode(int value)
 		return;
 	}
 
-	if (ts->ic_state <= NVT_IC_RESUME_IN && ts->ic_state != NVT_IC_INIT) {
+	if (ts->ic_state == NVT_IC_SUSPEND_IN) {
+		/*
+		 * Suspend in progress: do NOT program the IC here,
+		 * it races with nvt_enable_gesture_mode() in
+		 * nvt_ts_suspend(). Defer the flags, suspend will
+		 * apply them under lock right after entering
+		 * wakeup-gesture mode.
+		 */
+		ts->gesture_command_delayed = value;
+		NVT_LOG("Suspend in progress, defer gesture flags(%02x)",
+			value);
+	} else if (ts->ic_state < NVT_IC_RESUME_OUT) {
 		suspend_value = value;
 		if (suspend_value != ts->gesture_command) {
 			NVT_LOG("Screen off, applying gesture flags(%02x), ic state is %d",
@@ -4570,6 +4581,24 @@ static int32_t nvt_ts_suspend(struct device *dev)
 
 	/* gesture mode setup */
 	nvt_enable_gesture_mode(true);
+
+	/*
+	 * Apply gesture flags requested by userspace while suspend
+	 * was starting (ic_state was NVT_IC_SUSPEND_IN): they were
+	 * deferred to avoid racing with nvt_enable_gesture_mode().
+	 */
+	if (ts->gesture_command_delayed >= 0 &&
+	    ts->gesture_command_delayed != ts->gesture_command) {
+		if (!(ts->gesture_command & GESTURE_CMD_FOD) &&
+		    (ts->gesture_command_delayed & GESTURE_CMD_FOD)) {
+			nvt_irq_enable(true);
+			nvt_xm_htc_set_fod_enable(1);
+		}
+		ts->gesture_command = ts->gesture_command_delayed;
+		nvt_xm_htc_set_gesture_switch(ts->gesture_command & 0xFFFF);
+		NVT_LOG("Applied deferred gesture flags(%02x)",
+			ts->gesture_command);
+	}
 	/* gesture mode setup end */
 
 	msleep(50);
